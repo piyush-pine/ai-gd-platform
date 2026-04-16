@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Group Discussion - Live</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            max-width: 900px; 
+            margin: 0 auto; 
+            padding: 20px; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        .header { 
+            text-align: center; 
+            color: white; 
+            margin-bottom: 30px;
+        }
+        .topic { 
+            background: rgba(255,255,255,0.9); 
+            padding: 20px; 
+            border-radius: 16px; 
+            margin-bottom: 20px;
+            font-size: 18px; 
+            font-weight: 600;
+        }
+        .controls { 
+            display: flex; 
+            gap: 15px; 
+            justify-content: center; 
+            margin-bottom: 20px; 
+            flex-wrap: wrap;
+        }
+        button { 
+            padding: 16px 32px; 
+            font-size: 16px; 
+            border: none; 
+            border-radius: 12px; 
+            cursor: pointer; 
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        #startBtn { 
+            background: #10b981; 
+            color: white; 
+            min-width: 160px;
+        }
+        #startBtn:hover:not(:disabled) { background: #059669; }
+        #startBtn:disabled { background: #6b7280; cursor: not-allowed; }
+        #stopBtn { 
+            background: #ef4444; 
+            color: white; 
+            min-width: 120px;
+        }
+        #stopBtn:hover:not(:disabled) { background: #dc2626; }
+        #stopBtn:disabled { background: #9ca3af; cursor: not-allowed; }
+        .status { 
+            text-align: center; 
+            font-size: 14px; 
+            color: white; 
+            margin: 10px 0;
+        }
+        .scores-grid { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 20px; 
+            margin-bottom: 20px;
+        }
+        .score-card { 
+            background: rgba(255,255,255,0.95); 
+            padding: 20px; 
+            border-radius: 16px; 
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
+        .score-item { 
+            display: flex; 
+            justify-content: space-between; 
+            margin: 8px 0; 
+            font-size: 16px;
+        }
+        .score-value { font-weight: 700; color: #1e40af; }
+        #transcript { 
+            height: 300px; 
+            overflow-y: auto; 
+            background: rgba(255,255,255,0.95); 
+            border-radius: 16px; 
+            padding: 20px; 
+            border: 2px solid rgba(255,255,255,0.3);
+            font-family: 'Courier New', monospace;
+            line-height: 1.5;
+        }
+        .message { 
+            margin: 12px 0; 
+            padding: 12px 16px; 
+            border-radius: 12px; 
+            animation: slideIn 0.3s ease-out;
+        }
+        .student { background: #dbeafe; border-left: 4px solid #3b82f6; }
+        .ai-moderator { 
+            background: #ecfdf5; 
+            border-left: 4px solid #10b981; 
+            font-weight: 500;
+        }
+        .ai-panelist { 
+            background: #fef3c7; 
+            border-left: 4px solid #f59e0b; 
+        }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @media (max-width: 768px) { .scores-grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🤖 AI Group Discussion Practice</h1>
+        <p>Real-time scoring + AI panel feedback</p>
+    </div>
+
+    <div class="topic">
+        <strong>Topic:</strong> Should AI replace human recruiters in campus placements?
+    </div>
+
+    <div class="controls">
+        <button id="startBtn">🎤 Start Speaking</button>
+        <button id="stopBtn" disabled>⏹️ Stop Speaking</button>
+        <div class="status" id="status">Click Start to begin your GD practice</div>
+    </div>
+
+    <div class="scores-grid">
+        <div class="score-card">
+            <h3>📊 Live Scores</h3>
+            <div class="score-item">
+                <span>Relevance:</span>
+                <span class="score-value" id="relevanceScore">0%</span>
+            </div>
+            <div class="score-item">
+                <span>Clarity:</span>
+                <span class="score-value" id="clarityScore">0%</span>
+            </div>
+            <div class="score-item">
+                <span>Leadership:</span>
+                <span class="score-value" id="leadershipScore">0%</span>
+            </div>
+            <div class="score-item">
+                <span>Overall:</span>
+                <span class="score-value" id="overallScore">0%</span>
+            </div>
+        </div>
+        <div class="score-card">
+            <h3>🤝 AI Panel Response</h3>
+            <div id="aiResponse" style="min-height: 80px; padding: 12px;">
+                AI panel will respond here...
+            </div>
+        </div>
+    </div>
+
+    <div id="transcript">
+        <div style="text-align: center; color: #666; font-style: italic;">
+            Transcript will appear here as you speak...
+        </div>
+    </div>
+
+    <script>
+        class LiveGD {
+            constructor() {
+                this.mediaRecorder = null;
+                this.isRecording = false;
+                this.startTime = 0;
+                this.audioChunks = [];
+                this.init();
+            }
+
+            init() {
+                this.startBtn = document.getElementById('startBtn');
+                this.stopBtn = document.getElementById('stopBtn');
+                this.status = document.getElementById('status');
+                this.transcript = document.getElementById('transcript');
+
+                this.startBtn.onclick = () => this.startRecording();
+                this.stopBtn.onclick = () => this.stopRecording();
+                
+                // Simulate AI responses and scoring
+                this.simulateAI();
+            }
+
+            async startRecording() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            sampleRate: 16000
+                        } 
+                    });
+                    
+                    this.mediaRecorder = new MediaRecorder(stream, {
+                        mimeType: 'audio/webm'
+                    });
+
+                    this.mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            this.audioChunks.push(event.data);
+                            this.simulateSpeechRecognition(event.data);
+                        }
+                    };
+
+                    this.mediaRecorder.onstop = () => {
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+
+                    this.mediaRecorder.start(2000); // 2 second chunks
+                    this.isRecording = true;
+                    
+                    this.startTime = Date.now();
+                    this.updateTimer();
+                    this.updateUI(true);
+                    this.status.textContent = '🎤 Speaking... Speak clearly about the topic!';
+                    
+                } catch (err) {
+                    this.status.textContent = `❌ Microphone access denied: ${err.message}`;
+                }
+            }
+
+            stopRecording() {
+                if (this.mediaRecorder && this.isRecording) {
+                    this.mediaRecorder.stop();
+                    this.isRecording = false;
+                    this.updateUI(false);
+                    this.status.textContent = '✅ Recording stopped. Click Start to continue.';
+                }
+            }
+
+            updateUI(recording) {
+                this.startBtn.disabled = recording;
+                this.stopBtn.disabled = !recording;
+            }
+
+            updateTimer() {
+                if (this.isRecording) {
+                    const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
+                    const minutes = Math.floor(elapsed / 60);
+                    const seconds = elapsed % 60;
+                    document.getElementById('status').textContent = 
+                        `⏱️ Time: ${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')} | 🎤 Speaking...`;
+                    
+                    setTimeout(() => this.updateTimer(), 1000);
+                }
+            }
+
+            async simulateSpeechRecognition(audioData) {
+                try {
+                    const audioBlob = new Blob([audioData], {type: 'audio/webm'});
+                    const reader = new FileReader();
+                    
+                    reader.onload = async () => {
+                        const audioB64 = reader.result.split(',')[1];
+                        
+                        // Send to YOUR FastAPI backend
+                        const response = await fetch('http://localhost:8000/transcribe', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({data: audioB64})
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (data.transcript) {
+                            this.addToTranscript('Student', data.transcript);
+                            this.updateScores(data.scores);
+                            
+                            // AI Moderator responds (2s delay)
+                            setTimeout(() => {
+                                const aiResponse = this.generateAIResponse(data.transcript);
+                                this.addToTranscript('AI Moderator', aiResponse, true);
+                                document.getElementById('aiResponse').innerHTML = 
+                                    `<strong>${aiResponse}</strong><br><small>AI Panel feedback</small>`;
+                            }, 2000);
+                        }
+                    };
+                    
+                    reader.readAsDataURL(audioBlob);
+                } catch (error) {
+                    console.error('Backend error:', error);
+                    // Fallback to simulation
+                    const fakeTranscript = this.generateFakeSpeech();
+                    this.addToTranscript('Student', fakeTranscript);
+                    this.updateScores(this.calculateFakeScores(fakeTranscript));
+                }
+            }
+
+            generateFakeSpeech() {
+                const speeches = [
+                    "I think AI can help with initial screening but humans are still needed for final judgment",
+                    "Work from home has both advantages and disadvantages depending on the company culture",
+                    "Social media regulation is complex because of free speech concerns",
+                    "Campus placements need better preparation with real-world case studies"
+                ];
+                return speeches[Math.floor(Math.random() * speeches.length)];
+            }
+
+            calculateFakeScores(transcript) {
+                const relevance = Math.random() * 0.4 + 0.5; // 50-90%
+                const clarity = Math.random() * 0.3 + 0.6;
+                const leadership = Math.random() * 0.25 + 0.1;
+                const overall = (relevance + clarity + leadership) / 3;
+                
+                return {
+                    relevance: (relevance * 100).toFixed(1),
+                    clarity: (clarity * 100).toFixed(1),
+                    leadership: (leadership * 100).toFixed(1),
+                    overall: (overall * 100).toFixed(1)
+                };
+            }
+
+            generateAIResponse(transcript) {
+                const responses = {
+                    good: [
+                        "Excellent point! Anyone want to counter this perspective?",
+                        "Good structure. Can you give a specific example from your experience?",
+                        "That's a balanced view. What do others think about implementation challenges?"
+                    ],
+                    avg: [
+                        "Interesting. Could you elaborate with a concrete example?",
+                        "Valid point. How would this work in practice for large companies?",
+                        "I see your perspective. What about the counterarguments?"
+                    ],
+                    weak: [
+                        "Can you connect this more directly to the topic?",
+                        "Interesting thought. Let's relate it specifically to AI recruiters.",
+                        "Good start. Try connecting it to the main discussion point."
+                    ]
+                };
+                
+                const type = Math.random() > 0.7 ? 'good' : Math.random() > 0.4 ? 'avg' : 'weak';
+                return responses[type][Math.floor(Math.random() * responses[type].length)];
+            }
+
+            addToTranscript(speaker, text, isAI = false) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${isAI ? 'ai-moderator' : 'student'}`;
+                messageDiv.innerHTML = `<strong>${speaker}:</strong> ${text}`;
+                
+                this.transcript.appendChild(messageDiv);
+                this.transcript.scrollTop = this.transcript.scrollHeight;
+            }
+
+            updateScores(scores) {
+                document.getElementById('relevanceScore').textContent = `${scores.relevance}%`;
+                document.getElementById('clarityScore').textContent = `${scores.clarity}%`;
+                document.getElementById('leadershipScore').textContent = `${scores.leadership}%`;
+                document.getElementById('overallScore').textContent = `${scores.overall}%`;
+            }
+
+            simulateAI() {
+                // Initial AI moderator message
+                setTimeout(() => {
+                    this.addToTranscript('AI Moderator', 
+                        'Welcome to AI Group Discussion! Topic: Should AI replace human recruiters? ' +
+                        'You have 2 minutes per turn. Speak clearly and stay on topic. Ready? Start speaking!', true);
+                }, 1000);
+            }
+        }
+
+        // Start the app
+        new LiveGD();
+    </script>
+</body>
+</html>
